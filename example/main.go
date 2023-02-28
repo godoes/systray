@@ -4,7 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"systray"
+
+	"github.com/godoes/systray"
 )
 
 const appIconResID = 7
@@ -37,7 +38,7 @@ func main() {
 			if len(line) == 0 {
 				break
 			}
-			err := tray.ShowMessage("Got Text", line)
+			err := tray.ShowMessage("Got Text", line, true)
 			if err != nil {
 				fmt.Println(err)
 			}

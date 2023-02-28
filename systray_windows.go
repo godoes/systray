@@ -11,6 +11,7 @@ import (
 	"unsafe"
 )
 
+//goland:noinspection GoSnakeCaseUsage,GoUnusedConst,SpellCheckingInspection
 const (
 	WM_LBUTTONUP     = 0x0202
 	WM_LBUTTONDBLCLK = 0x0203
@@ -19,7 +20,7 @@ const (
 	WM_TRAYICON      = WM_USER + 69
 
 	WS_EX_APPWINDOW     = 0x00040000
-	WS_OVERLAPPEDWINDOW = 0X00000000 | 0X00C00000 | 0X00080000 | 0X00040000 | 0X00020000 | 0X00010000
+	WS_OVERLAPPEDWINDOW = 0x00000000 | 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000
 	CW_USEDEFAULT       = 0x80000000
 
 	NIM_ADD        = 0x00000000
@@ -55,8 +56,8 @@ const (
 	COLOR_BTNFACE = 15
 
 	GWLP_USERDATA       = -21
-	WS_CLIPSIBLINGS     = 0X04000000
-	WS_EX_CONTROLPARENT = 0X00010000
+	WS_CLIPSIBLINGS     = 0x04000000
+	WS_EX_CONTROLPARENT = 0x00010000
 
 	HWND_MESSAGE       = ^HWND(2)
 	NOTIFYICON_VERSION = 4
@@ -80,14 +81,15 @@ const (
 	WM_NULL       = 0
 )
 
+//goland:noinspection GoUnusedGlobalVariable
 var (
 	kernel32         = syscall.MustLoadDLL("kernel32")
 	GetModuleHandle  = kernel32.MustFindProc("GetModuleHandleW")
 	GetConsoleWindow = kernel32.MustFindProc("GetConsoleWindow")
 	GetLastError     = kernel32.MustFindProc("GetLastError")
 
-	shell32          = syscall.MustLoadDLL("shell32.dll")
-	Shell_NotifyIcon = shell32.MustFindProc("Shell_NotifyIconW")
+	shell32         = syscall.MustLoadDLL("shell32.dll")
+	ShellNotifyIcon = shell32.MustFindProc("Shell_NotifyIconW")
 
 	user32 = syscall.MustLoadDLL("user32.dll")
 
@@ -115,6 +117,7 @@ var (
 	LoadCursor = user32.MustFindProc("LoadCursorW")
 )
 
+//goland:noinspection SpellCheckingInspection
 type NOTIFYICONDATA struct {
 	CbSize           uint32
 	HWnd             HWND
@@ -140,6 +143,7 @@ type GUID struct {
 	Data4 [8]byte
 }
 
+//goland:noinspection SpellCheckingInspection
 type WNDCLASSEX struct {
 	CbSize        uint32
 	Style         uint32
@@ -168,6 +172,7 @@ type POINT struct {
 	X, Y int32
 }
 
+//goland:noinspection SpellCheckingInspection
 type (
 	HANDLE    uintptr
 	HINSTANCE HANDLE
@@ -178,9 +183,10 @@ type (
 	HBRUSH    HGDIOBJ
 )
 
+//goland:noinspection SpellCheckingInspection
 type HMENU HANDLE
 
-type WindowProc func(hwnd HWND, msg uint32, wparam, lparam uintptr) uintptr
+type WindowProc func(hWnd HWND, msg uint32, wParam, lParam uintptr) uintptr
 
 type MenuItem struct {
 	Label string
@@ -195,23 +201,24 @@ type MenuItem struct {
 
 type Systray struct {
 	id     uint32
-	hwnd   HWND
-	hinst  HINSTANCE
-	lclick func()
-	rclick func()
+	hWnd   HWND
+	hInst  HINSTANCE
+	lClick func()
+	rClick func()
 
 	Menu []*MenuItem
 }
 
 func New() (*Systray, error) {
-	ni := &Systray{lclick: func() {}, rclick: func() {}}
+	ni := &Systray{lClick: func() {}, rClick: func() {}}
 
 	MainClassName := "MainForm"
-	ni.hinst, _ = RegisterWindow(MainClassName, ni.WinProc)
+	ni.hInst, _ = RegisterWindow(MainClassName, ni.WinProc)
 
-	mhwnd, _, _ := CreateWindowEx.Call(
+	mainClass, _ := syscall.UTF16PtrFromString(MainClassName)
+	mHWnd, _, _ := CreateWindowEx.Call(
 		WS_EX_CONTROLPARENT,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(MainClassName))),
+		uintptr(unsafe.Pointer(mainClass)),
 		0,
 		WS_OVERLAPPEDWINDOW|WS_CLIPSIBLINGS,
 		CW_USEDEFAULT,
@@ -222,16 +229,17 @@ func New() (*Systray, error) {
 		0,
 		0,
 		0)
-	if mhwnd == 0 {
+	if mHWnd == 0 {
 		return nil, errors.New("create main win failed")
 	}
 
 	NotifyIconClassName := "NotifyIconForm"
-	RegisterWindow(NotifyIconClassName, ni.WinProc)
+	_, _ = RegisterWindow(NotifyIconClassName, ni.WinProc)
 
-	hwnd, _, _ := CreateWindowEx.Call(
+	iconClass, _ := syscall.UTF16PtrFromString(NotifyIconClassName)
+	hWnd, _, _ := CreateWindowEx.Call(
 		0,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(NotifyIconClassName))),
+		uintptr(unsafe.Pointer(iconClass)),
 		0,
 		0,
 		0,
@@ -242,14 +250,14 @@ func New() (*Systray, error) {
 		0,
 		0,
 		0)
-	if hwnd == 0 {
+	if hWnd == 0 {
 		return nil, errors.New("create notify win failed")
 	}
 
-	ni.hwnd = HWND(hwnd) // Important to keep this inside struct.
+	ni.hWnd = HWND(hWnd) // Important to keep this inside struct.
 
 	nid := NOTIFYICONDATA{
-		HWnd:             HWND(hwnd),
+		HWnd:             HWND(hWnd),
 		UFlags:           NIF_MESSAGE | NIF_STATE,
 		DwState:          NIS_HIDDEN,
 		DwStateMask:      NIS_HIDDEN,
@@ -257,14 +265,14 @@ func New() (*Systray, error) {
 	}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_ADD, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_ADD, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return nil, errors.New("shell notify create failed")
 	}
 
 	nid.UVersion = NOTIFYICON_VERSION
 
-	ret, _, _ = Shell_NotifyIcon.Call(NIM_SETVERSION, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ = ShellNotifyIcon.Call(NIM_SETVERSION, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return nil, errors.New("shell notify version failed")
 	}
@@ -274,7 +282,7 @@ func New() (*Systray, error) {
 }
 
 func (p *Systray) HWND() HWND {
-	return p.hwnd
+	return p.hWnd
 }
 
 // AppendMenu add menu item.
@@ -290,11 +298,11 @@ func (p *Systray) AppendSeparator() {
 func (p *Systray) Stop() error {
 	nid := NOTIFYICONDATA{
 		UID:  p.id,
-		HWnd: HWND(p.hwnd),
+		HWnd: p.hWnd,
 	}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_DELETE, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_DELETE, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return errors.New("shell notify delete failed")
 	}
@@ -307,7 +315,7 @@ func MakeIntResource(id uint16) *uint16 {
 
 // Show shows custom tray icon.
 func (p *Systray) Show(iconResID uint16, hint string) error {
-	icon, _, _ := LoadIcon.Call(uintptr(p.hinst), uintptr(unsafe.Pointer(MakeIntResource(iconResID))))
+	icon, _, _ := LoadIcon.Call(uintptr(p.hInst), uintptr(unsafe.Pointer(MakeIntResource(iconResID))))
 	if icon == 0 {
 		icon, _, _ = LoadIcon.Call(0, uintptr(IDI_APPLICATION))
 	}
@@ -337,13 +345,13 @@ func loadIconFile(file string) (HICON, error) {
 
 // ShowCustom shows custom tray icon.
 func (p *Systray) ShowCustom(file string, hint string) error {
-	hicon, err := loadIconFile(file)
+	hIcon, err := loadIconFile(file)
 	if err != nil {
 		icon, _, _ := LoadIcon.Call(0, uintptr(IDI_APPLICATION))
-		hicon = HICON(icon)
+		hIcon = HICON(icon)
 	}
 
-	err = p.SetIcon(hicon)
+	err = p.SetIcon(hIcon)
 	if err != nil {
 		return err
 	}
@@ -355,24 +363,25 @@ func (p *Systray) ShowCustom(file string, hint string) error {
 }
 
 func (p *Systray) OnClick(fn func()) {
-	p.lclick = fn
+	p.lClick = fn
 }
 
 func (p *Systray) OnRightClick(fn func()) {
-	p.rclick = fn
+	p.rClick = fn
 }
 
 func (p *Systray) SetTooltip(tooltip string) error {
 	nid := NOTIFYICONDATA{
 		UID:  p.id,
-		HWnd: HWND(p.hwnd),
+		HWnd: p.hWnd,
 	}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
 	nid.UFlags = NIF_TIP
-	copy(nid.SzTip[:], syscall.StringToUTF16(tooltip))
+	tip, _ := syscall.UTF16FromString(tooltip)
+	copy(nid.SzTip[:], tip)
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return errors.New("shell notify tooltip failed")
 	}
@@ -382,19 +391,21 @@ func (p *Systray) SetTooltip(tooltip string) error {
 func (p *Systray) ShowMessage(title, msg string, bigIcon bool) error {
 	nid := NOTIFYICONDATA{
 		UID:  p.id,
-		HWnd: HWND(p.hwnd),
+		HWnd: p.hWnd,
 	}
-	if bigIcon == true {
+	if bigIcon {
 		nid.DwInfoFlags = NIIF_USER
 	}
 
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
 	nid.UFlags = NIF_INFO
-	copy(nid.SzInfoTitle[:], syscall.StringToUTF16(title))
-	copy(nid.SzInfo[:], syscall.StringToUTF16(msg))
+	t, _ := syscall.UTF16FromString(title)
+	m, _ := syscall.UTF16FromString(msg)
+	copy(nid.SzInfoTitle[:], t)
+	copy(nid.SzInfo[:], m)
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return errors.New("shell notify tooltip failed")
 	}
@@ -404,7 +415,7 @@ func (p *Systray) ShowMessage(title, msg string, bigIcon bool) error {
 func (p *Systray) SetVisible(visible bool) error {
 	nid := NOTIFYICONDATA{
 		UID:  p.id,
-		HWnd: HWND(p.hwnd),
+		HWnd: p.hWnd,
 	}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
@@ -414,51 +425,51 @@ func (p *Systray) SetVisible(visible bool) error {
 		nid.DwState = NIS_HIDDEN
 	}
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return errors.New("shell notify tooltip failed")
 	}
 	return nil
 }
 
-func (p *Systray) SetIcon(hicon HICON) error {
+func (p *Systray) SetIcon(hIcon HICON) error {
 	nid := NOTIFYICONDATA{
 		UID:  p.id,
-		HWnd: HWND(p.hwnd),
+		HWnd: p.hWnd,
 	}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
 
 	nid.UFlags = NIF_ICON
-	if hicon == 0 {
+	if hIcon == 0 {
 		nid.HIcon = 0
 	} else {
-		nid.HIcon = hicon
+		nid.HIcon = hIcon
 	}
 
-	ret, _, _ := Shell_NotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
+	ret, _, _ := ShellNotifyIcon.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 	if ret == 0 {
 		return errors.New("shell notify icon failed")
 	}
 	return nil
 }
 
-func (p *Systray) WinProc(hwnd HWND, msg uint32, wparam, lparam uintptr) uintptr {
+func (p *Systray) WinProc(hWnd HWND, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
 	case NotifyIconMessageId:
-		if lparam == WM_LBUTTONUP {
-			p.lclick()
+		if lParam == WM_LBUTTONUP {
+			p.lClick()
 			if len(p.Menu) > 0 {
-				p.displayMenu(p.Menu)
+				_ = p.displayMenu(p.Menu)
 			}
-		} else if lparam == WM_RBUTTONUP {
-			p.rclick()
+		} else if lParam == WM_RBUTTONUP {
+			p.rClick()
 			if len(p.Menu) > 0 {
-				p.displayMenu(p.Menu)
+				_ = p.displayMenu(p.Menu)
 			}
 		}
 
 	case WM_COMMAND:
-		cmdMsgID := int(wparam & 0xffff)
+		cmdMsgID := int(wParam & 0xffff)
 		switch cmdMsgID {
 		default:
 			if cmdMsgID >= MenuItemMsgID && cmdMsgID < (MenuItemMsgID+len(p.Menu)) {
@@ -469,12 +480,12 @@ func (p *Systray) WinProc(hwnd HWND, msg uint32, wparam, lparam uintptr) uintptr
 		}
 	}
 
-	result, _, _ := DefWindowProc.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
+	result, _, _ := DefWindowProc.Call(uintptr(hWnd), uintptr(msg), wParam, lParam)
 	return result
 }
 
 func (p *Systray) Run() error {
-	hwnd := p.hwnd
+	hWnd := p.hWnd
 	var msg MSG
 	for {
 		rt, _, _ := GetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -485,13 +496,12 @@ func (p *Systray) Run() error {
 			return errors.New("run failed")
 		}
 
-		is, _, _ := IsDialogMessage.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&msg)))
+		is, _, _ := IsDialogMessage.Call(uintptr(hWnd), uintptr(unsafe.Pointer(&msg)))
 		if is == 0 {
-			TranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-			DispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			_, _, _ = TranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			_, _, _ = DispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		}
 	}
-	return nil
 }
 
 func (p *Systray) displayMenu(menuItems []*MenuItem) error {
@@ -519,25 +529,25 @@ func (p *Systray) displayMenu(menuItems []*MenuItem) error {
 		}
 
 		ret = appendMenu(menu, uintptr(flags), uintptr(itemID), item.Label)
-		if ret == false {
+		if !ret {
 			return errors.New("AppendMenu failed")
 		}
 	}
 
 	x, y, ok := getCursorPos()
-	if ok == false {
+	if !ok {
 		return errors.New("GetCursorPos failed")
 	}
 
-	if setForegroundWindow(p.hwnd) == false {
+	if !setForegroundWindow(p.hWnd) {
 		return errors.New("SetForegroundWindow failed")
 	}
 
-	if trackPopupMenu(menu, TPM_LEFTALIGN, x, y-5, p.hwnd) == false {
+	if !trackPopupMenu(menu, TPM_LEFTALIGN, x, y-5, p.hWnd) {
 		return errors.New("TrackPopupMenu failed")
 	}
 
-	if ret, _, _ := procPostMessage.Call(uintptr(p.hwnd), uintptr(WM_NULL), 0, 0); ret == 0 {
+	if ret, _, _ := procPostMessage.Call(uintptr(p.hWnd), uintptr(WM_NULL), 0, 0); ret == 0 {
 		return errors.New("PostMessage failed")
 	}
 	return nil
@@ -570,11 +580,12 @@ func getCursorPos() (x, y int, ok bool) {
 }
 
 func appendMenu(menu HMENU, flags uintptr, id uintptr, text string) bool {
+	t, _ := syscall.UTF16PtrFromString(text)
 	ret, _, _ := procAppendMenuW.Call(
 		uintptr(menu),
 		flags,
 		id,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(text))),
+		uintptr(unsafe.Pointer(t)),
 	)
 	return ret != 0
 }
@@ -584,43 +595,44 @@ func NewIconFromFile(filePath string) (uintptr, error) {
 	if err != nil {
 		return 0, err
 	}
-	hicon, _, _ := LoadImage.Call(
+	p, _ := syscall.UTF16PtrFromString(absFilePath)
+	hIcon, _, _ := LoadImage.Call(
 		0,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(absFilePath))),
+		uintptr(unsafe.Pointer(p)),
 		IMAGE_ICON,
 		0,
 		0,
 		LR_DEFAULTSIZE|LR_LOADFROMFILE)
-	if hicon == 0 {
+	if hIcon == 0 {
 		return 0, errors.New("load image failed: " + filePath)
 	}
-	return hicon, nil
+	return hIcon, nil
 }
 
 func RegisterWindow(name string, proc WindowProc) (HINSTANCE, error) {
-	hinst, _, _ := GetModuleHandle.Call(0)
-	if hinst == 0 {
+	hInst, _, _ := GetModuleHandle.Call(0)
+	if hInst == 0 {
 		return 0, errors.New("get module handle failed")
 	}
-	hicon, _, _ := LoadIcon.Call(0, uintptr(IDI_APPLICATION))
-	if hicon == 0 {
+	hIcon, _, _ := LoadIcon.Call(0, uintptr(IDI_APPLICATION))
+	if hIcon == 0 {
 		return 0, errors.New("load icon failed")
 	}
-	hcursor, _, _ := LoadCursor.Call(0, uintptr(IDC_ARROW))
-	if hcursor == 0 {
+	hCursor, _, _ := LoadCursor.Call(0, uintptr(IDC_ARROW))
+	if hCursor == 0 {
 		return 0, errors.New("load cursor failed")
 	}
 
-	hi := HINSTANCE(hinst)
+	hi := HINSTANCE(hInst)
 
 	var wc WNDCLASSEX
 	wc.CbSize = uint32(unsafe.Sizeof(wc))
 	wc.LpfnWndProc = syscall.NewCallback(proc)
 	wc.HInstance = hi
-	wc.HIcon = HICON(hicon)
-	wc.HCursor = HCURSOR(hcursor)
+	wc.HIcon = HICON(hIcon)
+	wc.HCursor = HCURSOR(hCursor)
 	wc.HbrBackground = COLOR_BTNFACE + 1
-	wc.LpszClassName = syscall.StringToUTF16Ptr(name)
+	wc.LpszClassName, _ = syscall.UTF16PtrFromString(name)
 
 	atom, _, _ := RegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
 	if atom == 0 {
